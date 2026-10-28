@@ -36,6 +36,34 @@ class UpgradeTests(unittest.TestCase):
         updated = u.model_config(original, 'gpt-6.1-sol')
         self.assertEqual(updated, original.replace('model = "old"', 'model = "gpt-6.1-sol"'))
 
+    def test_filter_preserves_current_model_metadata(self):
+        current = {'slug': 'gpt-6.1-sol', 'visibility': 'list', 'instructions': 'keep'}
+        hidden = {'slug': 'codex-auto-review', 'visibility': 'hide'}
+        data = {'identity': 'private-cache-metadata', 'models': [current, {'slug': 'gpt-5.6-sol'}, {'slug': 'gpt-5.6-terra'}, {'slug': 'gpt-5.6-luna'}, hidden]}
+        self.assertEqual(u.filtered_catalog(data), {'models': [current, hidden]})
+        self.assertEqual(len(data['models']), 5)
+
+    def test_filter_rejects_empty_result(self):
+        with self.assertRaises(RuntimeError):
+            u.filtered_catalog({'models': [{'slug': 'gpt-5.6-sol'}]})
+
+    def test_filter_apply_and_rollback(self):
+        with tempfile.TemporaryDirectory() as d:
+            base, old, new, link = self.fixture(d)
+            config = base / 'codex/config.toml'
+            original = config.read_bytes()
+            cache = base / 'codex/models_cache.json'
+            cache.write_text(json.dumps({'models': [{'slug': 'gpt-6.1-sol'}, {'slug': 'gpt-5.6-luna'}]}))
+            with patch.object(u, 'require_xcode_closed'):
+                u.hide_gpt56(base, link, apply=True)
+            settings = u.tomllib.loads(config.read_text())
+            catalog = json.loads(Path(settings['model_catalog_json']).read_text())
+            self.assertEqual(catalog['models'], [{'slug': 'gpt-6.1-sol'}])
+            self.assertEqual(link.resolve(), old)
+            backup = next((base / 'upgrade-backups').iterdir())
+            u.restore(base, backup)
+            self.assertEqual(config.read_bytes(), original)
+
     def test_checksums_require_both_sources(self):
         data = b'package'
         sha = hashlib.sha256(data).hexdigest()

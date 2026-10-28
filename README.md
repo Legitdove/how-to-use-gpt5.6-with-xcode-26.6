@@ -80,6 +80,20 @@ A generic “newer version available” banner appeared once in the verified set
 
 If account initialization hangs, the conversation fails, or native tools fail, roll back. Do not delete authentication data or change credentials to work around a runtime incompatibility.
 
+## Remove GPT-5.6 from the model picker
+
+The filter can run separately on an already-installed runtime:
+
+```bash
+python3 scripts/xcode_codex.py --hide-gpt56
+# Quit Xcode normally, then apply:
+python3 scripts/xcode_codex.py --apply --hide-gpt56
+```
+
+It backs up the configuration and cache, then writes a local catalog containing the existing model definitions with all `gpt-5.6` entries removed. GPT-6 and GPT-6.1 entries and internal hidden models retain their metadata. Existing history is preserved. A GPT-5.6 default is changed to `gpt-6.1-sol` only when Sol is present in the retained catalog.
+
+This uses Codex’s [documented `model_catalog_json` override](https://learn.chatgpt.com/docs/enterprise/roll-out-a-gateway). **A local catalog is a snapshot and stops automatic catalog discovery.** To receive future models or updated metadata, remove the top-level `model_catalog_json` line, restart Xcode to refresh the catalog, then quit and apply the filter again. The printed backup also supports the rollback command below.
+
 ## Existing conversation still says the model is unsupported
 
 Changing `config.toml` sets the default, but an existing Xcode conversation can retain its own model override. A conversation created with the custom label `GPT 6.1-Sol` continued sending that invalid identifier after the global configuration was corrected.

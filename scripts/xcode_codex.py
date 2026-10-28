@@ -33,17 +33,17 @@ def require_xcode_closed():
         raise RuntimeError('Quit Xcode normally first, then rerun this command.')
 
 
-def model_config(text, model):
-    """Replace only the top-level model; leave tables and other settings intact."""
+def top_level_config(text, key, value):
+    """Change one top-level string setting without rewriting other settings."""
     original = tomllib.loads(text)
-    expected = dict(original, model=model)
-    replacement = 'model = ' + json.dumps(model) + '\n'
+    expected = dict(original, **{key: value})
+    replacement = key + ' = ' + json.dumps(value) + '\n'
     lines = text.splitlines(keepends=True)
     # Try candidate source edits, accepting one only if TOML parsing proves
     # that the top-level model is the sole semantic change. This handles quoted
     # keys and multiline strings without rewriting unrelated configuration.
     for index, line in enumerate(lines):
-        if re.match(r"^\s*(?:model|\"model\"|'model')\s*=", line):
+        if re.match(r"^\s*(?:" + re.escape(key) + r"|\"" + re.escape(key) + r"\"|'" + re.escape(key) + r"')\s*=", line):
             candidate = ''.join(lines[:index] + [replacement] + lines[index + 1:])
             try:
                 if tomllib.loads(candidate) == expected:
@@ -55,6 +55,60 @@ def model_config(text, model):
         raise RuntimeError('Cannot safely update the top-level model setting.')
     return candidate
 
+
+
+def model_config(text, model):
+    return top_level_config(text, 'model', model)
+
+
+def filtered_catalog(data):
+    models = data.get('models')
+    if not isinstance(models, list) or not models:
+        raise RuntimeError('Source catalog is empty or invalid. Open Codex in Xcode to refresh it first.')
+    if any(not isinstance(m, dict) or not isinstance(m.get('slug'), str) for m in models):
+        raise RuntimeError('Invalid model catalog entry.')
+    kept = [m for m in models if not m['slug'].startswith('gpt-5.6')]
+    if not kept:
+        raise RuntimeError('Filtering would remove every model.')
+    # The cache has account-specific metadata; the local override needs only
+    # the ModelsResponse envelope. Preserve each retained model definition.
+    return {'models': kept}
+
+
+def hide_gpt56(base, link, apply=False):
+    config = base / 'codex/config.toml'
+    text = config.read_text() if config.exists() else ''
+    settings = tomllib.loads(text)
+    source = Path(settings['model_catalog_json']) if settings.get('model_catalog_json') else base / 'codex/models_cache.json'
+    data = json.loads(source.read_text())
+    filtered = filtered_catalog(data)
+    available = {m['slug'] for m in filtered['models']}
+    if settings.get('model', '').startswith('gpt-5.6'):
+        if DEFAULT_MODEL not in available:
+            raise RuntimeError('Choose an available current default model before filtering.')
+        text = model_config(text, DEFAULT_MODEL)
+    removed = len(data['models']) - len(filtered['models'])
+    print('GPT-5.6 catalog entries to remove:', removed)
+    if not apply:
+        print('Dry run only. Quit Xcode and rerun with --apply --hide-gpt56.')
+        return
+    require_xcode_closed()
+    backup = snapshot(base, link)
+    catalogs = base / 'codex/model-catalogs'
+    catalogs.mkdir(mode=0o700, exist_ok=True)
+    target = catalogs / ('without-gpt56-' + uuid.uuid4().hex + '.json')
+    updated = top_level_config(text, 'model_catalog_json', str(target))
+    try:
+        target.write_text(json.dumps(filtered, indent=2) + '\n')
+        target.chmod(0o600)
+        config.write_text(updated)
+        config.chmod(0o600)
+    except BaseException:
+        restore(base, backup)
+        target.unlink(missing_ok=True)
+        raise
+    print('Filtered catalog configured. Reopen Xcode. Rollback backup:', backup)
+    print('This local catalog is a snapshot; remove model_catalog_json and restart to refresh discovery.')
 
 
 def verify_archive(data, sums, digest, filename):
@@ -177,6 +231,7 @@ def main():
     parser.add_argument('--apply', action='store_true', help='Install and switch runtime; otherwise inspect only')
     parser.add_argument('--version', default=DEFAULT_VERSION, help='Exact stable Codex version')
     parser.add_argument('--model', default=DEFAULT_MODEL, help='Canonical model ID available to your account')
+    parser.add_argument('--hide-gpt56', action='store_true', help='Filter GPT-5.6 from the current catalog without installing a runtime')
     parser.add_argument('--rollback', type=Path, metavar='BACKUP', help='Restore a backup (requires --apply)')
     args = parser.parse_args()
     if platform.system() != 'Darwin':
@@ -203,6 +258,9 @@ def main():
     link = base / 'Agents/XcodeVersions' / match[1] / 'codex'
     if not link.is_symlink() or not link.resolve().is_dir():
         raise RuntimeError('No existing Codex runtime link for this Xcode build. Enable Codex in Xcode first.')
+    if args.hide_gpt56:
+        hide_gpt56(base, link, apply=args.apply)
+        return
     runtime = base / 'Agents/codex' / args.version
     print(output.strip())
     print('Current runtime:', link.resolve())
