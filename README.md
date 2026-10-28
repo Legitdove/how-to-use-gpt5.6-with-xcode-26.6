@@ -1,360 +1,115 @@
-# Using GPT-5.6 Luna and Sol in Xcode 26.6 Codex
+# Current GPT models in Xcode’s built-in Codex integration
 
-This documents a tested way to make Xcode's built-in Codex integration use a newer Codex runtime and newer OpenAI models through a normal ChatGPT subscription. No API key is required.
+This fork adds a reversible installer and a verified update for **Xcode 27.1 (27A9275), Apple Silicon and Codex 0.165.0**. It keeps the existing ChatGPT account authentication; no API key is required.
 
-Heads up: xhigh is the highest reasoning mode that was found to work. If you want Luna max, this won't get you that. Luna xhigh does work though.
+The repository name comes from the original Xcode 26.6 guide. Its investigation is preserved in [Xcode-26.6-Codex-Investigation.md](Xcode-26.6-Codex-Investigation.md). Earlier account-handshake failures on Xcode 26.6 do not establish compatibility with newer Xcode versions.
 
-## Tested environment
+This changes Xcode’s per-user agent runtime. It is an unofficial configuration, and future Xcode updates may replace the build-specific runtime link.
 
-- Xcode Version 26.6 (17F113)
-- macOS 26.3.1(a)
-- Apple Silicon Mac
-- ChatGPT account authentication
-- Codex 0.148.0
-- GPT-5.6 Luna
-- GPT-5.6 Sol
+## Verified on 28 October 2026
 
-This is not an officially supported Xcode configuration. Xcode updates can change the Codex app-server protocol, paths, or bundled runtime and may require repeating or revising these steps.
-
-## Why do this?
-
-Xcode 26.6 shipped with an older Codex runtime. In the configuration tested here, Xcode was using Codex 0.140.0 and its model picker exposed only `Default` and `GPT-5.5`.
-
-Replacing that runtime with Codex 0.148.0 allows Xcode's existing Codex UI to use newer models while continuing to authenticate with the ChatGPT account already configured in Xcode.
-
-The practical benefits are:
-
-- **GPT-5.6 Luna:** fast coding model with substantially lower ChatGPT subscription usage than heavier models. For routine coding work, this can greatly reduce subscription burn while retaining strong coding performance.
-- **GPT-5.6 Sol:** higher-capability model for harder coding and reasoning tasks.
-- **Higher reasoning levels:** Luna works at `xhigh` reasoning in this Xcode configuration.
-- **No API billing:** authentication remains through the ChatGPT account rather than an OpenAI API key.
-- **Stock Xcode workflow:** this keeps Xcode's built-in Codex integration instead of replacing it with a separate ACP agent or external coding tool.
-
-## What was tested
-
-| Configuration | Result |
+| Check | Result |
 |---|---|
-| Xcode's original Codex 0.140.0 | Works, but did not expose GPT-5.6 Luna |
-| Codex 0.147.0 | Works in Xcode |
-| Codex 0.148.0 | Works in Xcode and is the recommended tested version |
-| Codex 0.149.x | Failed through Xcode |
-| Codex 0.154.0-alpha.6.2 | Xcode Codex account handshake failed |
-| Codex 0.154.0 release | Xcode Codex Account row spun indefinitely; account initialization failed even with both runtime binaries installed |
-| GPT-6 Astra through Xcode 26.6 | Could not be tested because Codex 0.154.0 could not complete Xcode account initialization |
-| GPT-5.6 Luna `high` | Works |
-| GPT-5.6 Luna `xhigh` | Works |
-| GPT-5.6 Luna `max` through Xcode | Fails |
-| GPT-5.6 Luna `max` directly from Codex CLI | Works |
-| GPT-5.6 Sol `low` on 0.148 | Works |
-| GPT-5.6 Sol `medium` on 0.148 | Works |
+| Xcode | 27.1, build 27A9275 |
+| Runtime upgrade | Codex 0.153.1 → 0.165.0 |
+| Download integrity | SHA256 matched GitHub release asset digest and published SHA256SUMS |
+| ChatGPT authentication | Successful |
+| Default model | `gpt-6.1-sol` |
+| Conversation | Sol completed successfully at `low` reasoning |
+| Native Xcode tools | `XcodeLS` identified the open project and listed its immediate groups |
+| Model picker | GPT-6.1 Sol, GPT-6.1 Terra, GPT-6 Astra, GPT-6 Sol and GPT-6 Luna visible |
 
-Luna `max` working directly in the Codex CLI but failing through Xcode indicates that the limitation is in the Xcode/app-server integration path, not Luna itself.
+Only Sol was exercised in a conversation. The other models were verified in the picker and refreshed catalog; their execution and higher reasoning levels were not tested. Availability depends on your account, workspace policy and rollout access. See [OpenAI’s current model documentation](https://learn.chatgpt.com/docs/models?surface=web).
 
-### Service tier testing
+## Install
 
-| `service_tier` setting | Xcode result |
-|---|---|
-| omitted | Works |
-| `"flex"` | Works |
-| `"fast"` | Fails |
-| `"priority"` | Fails |
-| `"default"` | Fails |
+Requirements: macOS on Apple Silicon, Python 3.11 or newer, full Xcode selected with `xcode-select`, and an existing Codex setup in Xcode. The script uses the Python standard library and does not need npm or the terminal Codex installation.
 
-With the setting omitted, Luna uses the normal standard/default service tier. The recommended configuration therefore has **no `service_tier` line**.
-
-Codex 0.148 contains Fast-mode support and the Luna model catalog advertises a Fast/priority tier, but Xcode 26.6 did not successfully enable it in this tested path.
-
-## Installation
-
-### 1. Find Xcode's current Codex runtime
-
-Xcode 26.6 uses a version-specific symlink:
+Clone this fork, enter its directory, then inspect the proposed changes:
 
 ```bash
-BASE="$HOME/Library/Developer/Xcode/CodingAssistant/Agents"
-XCODE_BUILD="17F113"
-
-readlink "$BASE/XcodeVersions/$XCODE_BUILD/codex"
+git clone https://github.com/Legitdove/how-to-use-gpt5.6-with-xcode-26.6.git
+cd how-to-use-gpt5.6-with-xcode-26.6
+python3 scripts/xcode_codex.py
 ```
 
-On the tested installation, this pointed to Codex 0.140.0.
+The default command is a dry run: it prints the selected Xcode build, current runtime, proposed runtime and model. It makes no changes or network requests.
 
-Save the original target before changing anything:
+Quit Xcode normally, resolving any save or running-task prompts, then install:
 
 ```bash
-ORIGINAL_CODEX_TARGET="$(readlink "$BASE/XcodeVersions/$XCODE_BUILD/codex")"
-echo "$ORIGINAL_CODEX_TARGET"
+python3 scripts/xcode_codex.py --apply
 ```
 
-Keep that value if you want an easy rollback later.
+The script:
 
-### 2. Install Codex 0.148.0
+1. Determines the selected Xcode build instead of hardcoding a build number.
+2. Downloads the official [Codex 0.165.0 package](https://github.com/openai/codex/releases/tag/rust-v0.165.0) and checks its SHA256 against both published sources.
+3. Installs the full package in a separate version directory, retaining `bin/codex`, its matching `codex-code-mode-host`, resources and path helpers.
+4. Preserves the current Xcode package metadata, updating the version, download URL, archive SHA512 and `bin/codex` entrypoint.
+5. Creates a private, timestamped backup of the runtime link target, configuration and model cache.
+6. Changes only the top-level model to `gpt-6.1-sol`, removes the backed-up cache for refresh, and switches only the selected build’s runtime link.
+
+It refuses to overwrite an existing version directory or switch while Xcode is running. An installation error during the configuration/link change triggers restoration of the previous state. It does not modify Xcode.app, credentials, unrelated build links, reasoning settings or service-tier settings.
+
+Reopen Xcode manually and complete the checks below. Installing a package alone does not prove Xcode protocol compatibility.
+
+### Explicit version and model
+
+Defaults are pinned to the verified version rather than automatically following new releases. To test another stable release or model:
 
 ```bash
-npm install -g @openai/codex@0.148.0
+python3 scripts/xcode_codex.py --apply --version 0.165.0 --model gpt-6.1-sol
 ```
 
-Check the installed version:
+Use a canonical model identifier, **not a display label**. For example, `GPT 6.1-Sol` caused a model-not-supported error; `gpt-6.1-sol` worked. Do not assume a newer release will work merely because it installs successfully.
 
-```bash
-codex --version
-```
+## Verify in Xcode
 
-Find the native Apple Silicon binary without assuming a fixed npm prefix:
+1. Open your project and start a **new Codex conversation**. Confirm account initialization completes.
+2. Open Conversation Settings → Model. Check that the expected models appear.
+3. Submit this read-only prompt:
 
-```bash
-NPM_ROOT="$(npm root -g)"
-CODEX_BIN_DIR="$NPM_ROOT/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin"
-CODEX_NATIVE="$CODEX_BIN_DIR/codex"
-CODEX_CODE_MODE_HOST="$CODEX_BIN_DIR/codex-code-mode-host"
+   > Runtime verification only. Do not edit any files. Use only Xcode-native tools to identify the currently open project's name and list its top-level project files. Do not use shell commands or direct filesystem inspection. Briefly report which Xcode tools you used.
 
-"$CODEX_NATIVE" --version
-ls -l "$CODEX_CODE_MODE_HOST"
-```
+4. Confirm a successful response uses `XcodeLS` and matches the open project. The verified run completed in 22 seconds.
 
-It should report Codex 0.148.0.
+The model cache at `~/Library/Developer/Xcode/CodingAssistant/codex/models_cache.json` should show client version `0.165.0` and the current catalog. Xcode’s Codex configuration is in the same directory’s `config.toml`. Logs are in `logs_2.sqlite`; inspect only the request metadata needed to verify the model and authentication, since full log entries can include private project content.
 
-### 3. Copy 0.148.0 and its code-mode host into Xcode's runtime directory
+A generic “newer version available” banner appeared once in the verified setup and was dismissed. The runtime executable and refreshed cache confirmed 0.165.0 was active.
 
-```bash
-mkdir -p "$BASE/codex/0.148.0"
-
-cp "$CODEX_NATIVE" "$BASE/codex/0.148.0/codex"
-cp "$CODEX_CODE_MODE_HOST" "$BASE/codex/0.148.0/codex-code-mode-host"
-chmod +x "$BASE/codex/0.148.0/codex" "$BASE/codex/0.148.0/codex-code-mode-host"
-
-ls -la "$BASE/codex/0.148.0"
-"$BASE/codex/0.148.0/codex" --version
-```
-
-Do not replace Xcode's original runtime directory. Keeping versions separately makes rollback simple.
-
-**Important:** Codex 0.148.0 expects `codex-code-mode-host` to be present alongside `codex`. Copying only the main `codex` executable can make the model itself appear to work while Xcode-native tool calls fail. In the tested setup, Xcode's `xcode-tools` MCP server initialized successfully, but tool calls failed with an error like:
-
-```text
-failed to spawn code-mode host .../codex/codex-code-mode-host: No such file or directory (os error 2)
-```
-
-Installing the matching 0.148.0 `codex-code-mode-host` next to the 0.148.0 `codex` executable fixed the Xcode tool path.
-
-### 4. Point Xcode at Codex 0.148.0
-
-Fully quit Xcode first.
-
-```bash
-ln -sfn   "$BASE/codex/0.148.0"   "$BASE/XcodeVersions/$XCODE_BUILD/codex"
-```
-
-Verify:
-
-```bash
-readlink "$BASE/XcodeVersions/$XCODE_BUILD/codex"
-"$BASE/XcodeVersions/$XCODE_BUILD/codex/codex" --version
-```
-
-The second command should report Codex 0.148.0.
-
-### 5. Regenerate Xcode's model cache
-
-Xcode stores the Codex model catalog at:
-
-```text
-~/Library/Developer/Xcode/CodingAssistant/codex/models_cache.json
-```
-
-Move the old cache out of the way:
-
-```bash
-CODEX_HOME="$HOME/Library/Developer/Xcode/CodingAssistant/codex"
-
-mv   "$CODEX_HOME/models_cache.json"   "$CODEX_HOME/models_cache.json.backup"   2>/dev/null || true
-```
-
-Launch Xcode and open its Codex integration. Codex should fetch a fresh model catalog using the newer runtime.
-
-Check for Luna:
-
-```bash
-grep -n '"gpt-5.6-luna"' "$CODEX_HOME/models_cache.json"
-```
-
-The regenerated cache in the tested setup identified the client as 0.148.0 and contained GPT-5.6 Luna, including its supported reasoning levels.
-
-### 6. Configure Luna
-
-Xcode's Codex configuration is:
-
-```text
-~/Library/Developer/Xcode/CodingAssistant/codex/config.toml
-```
-
-Use:
-
-```toml
-model = "gpt-5.6-luna"
-model_reasoning_effort = "xhigh"
-```
-
-Do **not** add a `service_tier` line.
-
-Fully quit and restart Xcode after changing the configuration.
-
-The resulting tested configuration is:
-
-```text
-GPT-5.6 Luna
-reasoning: xhigh
-service tier: standard/default
-authentication: ChatGPT account
-```
-
-
-## Verify Xcode-native tools
-
-After restarting Xcode, verify that Codex is using Xcode's native tools rather than guessing from project context. With a project open, use this prompt:
-
-```text
-Use the Xcode tools to tell me the currently open project's name and list its top-level project files. Do not use shell commands or direct filesystem inspection.
-```
-
-In the tested setup, Codex reported using Xcode's `XcodeLS` tool and returned the live project navigator contents.
-
-For a stronger end-to-end test, ask Codex to make an obvious source edit through Xcode:
-
-```text
-Using only the Xcode tools, edit ContentView.swift and change the displayed text in the default SwiftUI view to "Xcode Tools Are Working". Do not use shell commands or direct filesystem access. After making the change, tell me which Xcode tool you used.
-```
-
-The source edit was successfully applied in the tested 0.148.0 configuration. This confirms that the Xcode-native tool bridge works when both matching runtime binaries are installed.
-
-## Using GPT-5.6 Sol
-
-Change `config.toml`:
-
-```toml
-model = "gpt-5.6-sol"
-model_reasoning_effort = "medium"
-```
-
-Restart Xcode.
-
-`low` and `medium` were successfully tested with Sol through Xcode 26.6 and Codex 0.148.0.
-
-There is a public Codex 0.148.0 bug report involving `prompt_cache_retention` being sent to GPT-5.6 Sol on some configurations. If Sol requests fail unexpectedly with 0.148.0, Codex 0.147.0 is a useful fallback.
-
-## Verify what Xcode is actually using
-
-Xcode's Codex logs are stored at:
-
-```text
-~/Library/Developer/Xcode/CodingAssistant/codex/logs_2.sqlite
-```
-
-A successful request in the tested setup logged:
-
-```text
-model=gpt-5.6-luna
-codex.turn.reasoning_effort=xhigh
-auth_mode=Some(Chatgpt)
-```
-
-Query recent Luna requests with:
-
-```bash
-DB="$HOME/Library/Developer/Xcode/CodingAssistant/codex/logs_2.sqlite"
-
-sqlite3 "$DB" "
-SELECT feedback_log_body
-FROM logs
-WHERE feedback_log_body LIKE '%model=gpt-5.6-luna%'
-ORDER BY ts DESC, ts_nanos DESC, id DESC
-LIMIT 5;
-"
-```
-
-This verifies that Xcode is actually honoring the configured model and reasoning level.
-
-## macOS permission prompt
-
-The first time Xcode launches a newly copied Codex executable, macOS may ask whether it should be allowed to access the Documents folder.
-
-This is expected. macOS privacy controls can treat a new executable/version/path as a new requester even though Xcode launches it.
-
-If your Xcode projects are in Documents and you want Codex to work with them, allow the access.
-
-
-## Codex 0.154.0 and GPT-6 Astra testing
-
-Codex 0.154.0 was also tested because newer Codex releases add support for GPT-6 Astra. The release package contained both required Apple Silicon runtime binaries:
-
-```text
-codex
-codex-code-mode-host
-```
-
-Both were copied into a separate `0.154.0` Xcode runtime directory and the Xcode symlink was pointed at it. This avoided changing or deleting the known-good 0.148.0 installation.
-
-With Xcode 26.6, however, the Codex **Account** row remained on an indefinite spinner and account initialization never completed. This was the same general failure previously seen with `0.154.0-alpha.6.2`. Because the Xcode/Codex account handshake failed before normal operation, GPT-6 Astra could not be tested through Xcode's built-in Codex integration.
-
-This means 0.154.0 should not currently replace 0.148.0 for this Xcode 26.6 configuration. It does **not** establish that Astra itself is incompatible with Xcode. The failure occurs earlier, at the Xcode/app-server account initialization layer.
-
-If experimenting with future Codex releases, keep 0.148.0 intact and install each candidate in its own directory. Switching back is then just a symlink change followed by a full Xcode restart.
+If account initialization hangs, the conversation fails, or native tools fail, roll back. Do not delete authentication data or change credentials to work around a runtime incompatibility.
 
 ## Rollback
 
-If you already copied Codex 0.147.0 into Xcode's agent directory:
-
-```bash
-BASE="$HOME/Library/Developer/Xcode/CodingAssistant/Agents"
-XCODE_BUILD="17F113"
-
-ln -sfn   "$BASE/codex/0.147.0"   "$BASE/XcodeVersions/$XCODE_BUILD/codex"
-```
-
-To restore Xcode's original runtime, use the exact target saved before making changes:
-
-```bash
-ln -sfn   "$ORIGINAL_CODEX_TARGET"   "$BASE/XcodeVersions/$XCODE_BUILD/codex"
-```
-
-Fully quit and restart Xcode after changing runtimes. You may also want to regenerate `models_cache.json`.
-
-## Xcode updates
-
-The runtime path contains the Xcode build number:
+The installer prints the backup directory, normally under:
 
 ```text
-~/Library/Developer/Xcode/CodingAssistant/Agents/XcodeVersions/17F113/codex
+~/Library/Developer/Xcode/CodingAssistant/upgrade-backups/<timestamp>-<unique-suffix>
 ```
 
-A future Xcode update may create a new directory under `XcodeVersions`.
-
-Check with:
+Quit Xcode normally, then use the exact backup path printed by your installation:
 
 ```bash
-ls -la "$HOME/Library/Developer/Xcode/CodingAssistant/Agents/XcodeVersions"
+python3 scripts/xcode_codex.py --apply --rollback "/absolute/path/to/your/backup"
 ```
 
-If the modification stops working after an Xcode update, inspect the new build directory and repeat the symlink step if that Xcode build remains compatible with Codex 0.148.0.
+Reopen Xcode. Rollback restores the previous runtime link, exact configuration and model cache. This also restores any incorrect model identifier that existed before the upgrade. Both runtime versions remain on disk.
 
-Do not assume newer Codex releases will work just because 0.148.0 does. In this testing, 0.149 failed through Xcode 26.6, and both 0.154.0-alpha.6.2 and the 0.154.0 release failed during Xcode's Codex account initialization. The 0.154.0 release was tested with both `codex` and its matching `codex-code-mode-host`, so the account failure was not caused by the missing-helper problem that affected the initial 0.148.0 tool test.
+Backups can contain private configuration. Keep them local; do not commit or publish them.
 
-## Recommended configuration
+After an Xcode update, rerun the dry run to inspect its new build-specific link. This script deliberately does not alter all installed Xcode versions.
 
-For routine Xcode coding:
+## Development
 
-```toml
-model = "gpt-5.6-luna"
-model_reasoning_effort = "xhigh"
+```bash
+python3 -m unittest discover -s tests -v
 ```
 
-No `service_tier` line.
+Tests cover dry-run behavior, configuration preservation, checksum failures, unsafe archives, exact rollback, absent files and automatic recovery from a failed switch. They use temporary directories and do not modify your Xcode installation.
 
-Use Sol selectively when its additional capability is worth the higher ChatGPT subscription usage.
+## Sources
 
-## References
-
-- [OpenAI Codex repository](https://github.com/openai/codex)
-- [Codex 0.148.0 release](https://github.com/openai/codex/releases/tag/rust-v0.148.0)
-- [Codex 0.148.0 GPT-5.6 Sol `prompt_cache_retention` issue](https://github.com/openai/codex/issues/39397)
-- [Codex releases](https://github.com/openai/codex/releases)
+- [Original guide](https://github.com/acceleroto/how-to-use-gpt5.6-with-xcode-26.6)
+- [Official Codex 0.165.0 release and assets](https://github.com/openai/codex/releases/tag/rust-v0.165.0)
+- [Current OpenAI model documentation](https://learn.chatgpt.com/docs/models?surface=web)

@@ -1,3 +1,5 @@
+> Historical investigation for Xcode 26.6. Its runtime compatibility results do not describe Xcode 27.1. See [the current README](README.md) for the verified Xcode 27.1 / Codex 0.165.0 procedure.
+
 # Xcode 26.6 + OpenAI Codex: Investigation Notes
 
 ## Purpose
