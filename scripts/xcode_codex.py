@@ -247,6 +247,7 @@ def main():
         require_xcode_closed()
         backup = publish_and_install(base, link, stage, runtime, args.model)
     print('Installed. Reopen Xcode and complete the README verification checks.')
+    print('For existing conversations, reselect the model from Conversation Settings; saved overrides can retain an invalid model name.')
     print('Rollback: python3 scripts/xcode_codex.py --apply --rollback ' + repr(str(backup)))
 
 

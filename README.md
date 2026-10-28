@@ -80,6 +80,14 @@ A generic “newer version available” banner appeared once in the verified set
 
 If account initialization hangs, the conversation fails, or native tools fail, roll back. Do not delete authentication data or change credentials to work around a runtime incompatibility.
 
+## Existing conversation still says the model is unsupported
+
+Changing `config.toml` sets the default, but an existing Xcode conversation can retain its own model override. A conversation created with the custom label `GPT 6.1-Sol` continued sending that invalid identifier after the global configuration was corrected.
+
+In the affected conversation, open **Conversation Settings → Model** and explicitly select **GPT-6.1-Sol** from the populated catalog. Avoid entering the display label through **Other…**. Then send the read-only diagnostic prompt above before retrying any editing task. Starting a new conversation is another option.
+
+This recovery was verified on 28 October 2026 in the previously failing conversation: reselecting the catalog entry changed the actual request identifier to `gpt-6.1-sol`; the conversation then completed an `XcodeLS` inspection in 16 seconds with ChatGPT authentication. The installer does not rewrite saved conversation history or per-conversation overrides.
+
 ## Rollback
 
 The installer prints the backup directory, normally under:
